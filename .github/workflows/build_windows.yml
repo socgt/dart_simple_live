@@ -13,7 +13,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    # 关键修复：设置项目路径为 simple_live_app
     - name: Set project path
       run: echo "PROJECT_PATH=$env:GITHUB_WORKSPACE\simple_live_app" | Out-File -FilePath $env:GITHUB_ENV -Append
 
@@ -25,7 +24,6 @@ jobs:
 
     - name: Verify project structure
       run: |
-        # 检查 simple_live_app 目录
         if (-not (Test-Path "$env:PROJECT_PATH\pubspec.yaml")) {
           Write-Error "pubspec.yaml not found in simple_live_app directory!"
           Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Depth 2 | Format-Table Name
@@ -36,7 +34,6 @@ jobs:
     - name: Enable Windows desktop
       run: flutter config --enable-windows-desktop
 
-    # 关键修复：在 simple_live_app 目录执行
     - name: Install dependencies
       working-directory: ${{ env.PROJECT_PATH }}
       run: flutter pub get
@@ -48,19 +45,18 @@ jobs:
         Expand-Archive -Path ffmpeg.zip -DestinationPath "C:\ffmpeg" -Force
         echo "C:\ffmpeg\ffmpeg-master-latest-win64-gpl-shared\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+    # 修复的 VLC 安装步骤
     - name: Install VLC
       run: |
         $vlcUrl = "https://download.videolan.org/pub/vlc/3.0.20/win64/vlc-3.0.20-win64.exe"
         Invoke-WebRequest -Uri $vlcUrl -OutFile vlc_installer.exe
-        Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc" -Force
+        Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc"
         echo "C:\vlc" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-    # 关键修复：在 simple_live_app 目录构建
     - name: Build Windows Release
       working-directory: ${{ env.PROJECT_PATH }}
       run: flutter build windows --release
 
-    # 关键修复：上传 simple_live_app 的构建结果
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
