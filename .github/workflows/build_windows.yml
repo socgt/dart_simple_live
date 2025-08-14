@@ -45,7 +45,6 @@ jobs:
         Expand-Archive -Path ffmpeg.zip -DestinationPath "C:\ffmpeg" -Force
         echo "C:\ffmpeg\ffmpeg-master-latest-win64-gpl-shared\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-    # 修复的 VLC 安装步骤
     - name: Install VLC
       run: |
         $vlcUrl = "https://download.videolan.org/pub/vlc/3.0.20/win64/vlc-3.0.20-win64.exe"
@@ -53,12 +52,34 @@ jobs:
         Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc"
         echo "C:\vlc" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+    # 关键修复：添加构建前清理和构建后验证
+    - name: Clean build directory
+      working-directory: ${{ env.PROJECT_PATH }}
+      run: flutter clean
+
     - name: Build Windows Release
       working-directory: ${{ env.PROJECT_PATH }}
-      run: flutter build windows --release
+      run: |
+        flutter build windows --release
+        # 验证构建输出是否存在
+        $buildDir = "build\windows\runner\Release"
+        if (-not (Test-Path $buildDir)) {
+          Write-Error "Build output not found at: $buildDir"
+          # 列出可能的构建目录
+          echo "Possible build locations:"
+          Get-ChildItem -Path build -Recurse -Filter "*.exe" | Format-Table FullName
+          exit 1
+        }
+        echo "Build output found at: $buildDir"
 
+    # 关键修复：使用通配符路径确保找到文件
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: dart_simple_live_windows
-        path: ${{ env.PROJECT_PATH }}\build\windows\runner\Release
+        path: |
+          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.exe
+          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.dll
+          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/data
+          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.pak
+          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.manifest
