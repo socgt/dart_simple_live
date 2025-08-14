@@ -16,6 +16,18 @@ jobs:
     - name: Set project path
       run: echo "PROJECT_PATH=$env:GITHUB_WORKSPACE\simple_live_app" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+    # 关键新增：获取应用版本号
+    - name: Extract App Version
+      id: app-version
+      working-directory: ${{ env.PROJECT_PATH }}
+      run: |
+        # 从 pubspec.yaml 中提取版本号
+        $version = (Get-Content pubspec.yaml | Select-String 'version:\s*([\d.]+)').Matches.Groups[1].Value
+        
+        # 设置输出变量
+        echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        echo "Extracted app version: $version"
+
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
@@ -47,15 +59,15 @@ jobs:
       working-directory: ${{ env.PROJECT_PATH }}
       run: flutter build windows --release
 
-    # 关键修复：创建 ZIP 包并移动到工作区根目录
-    - name: Create and Move Release ZIP
+    # 使用版本号命名 ZIP 文件
+    - name: Create Versioned Release ZIP
       run: |
         # 进入项目目录
         cd ${{ env.PROJECT_PATH }}
         
-        # 创建 ZIP 文件
+        # 创建 ZIP 文件（使用版本号命名）
         $releaseDir = "build\windows\x64\runner\Release"
-        $zipName = "dart_simple_live_windows_$env:GITHUB_RUN_NUMBER.zip"
+        $zipName = "dart_simple_live_v${{ steps.app-version.outputs.version }}.zip"
         Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipName -Force
         
         # 移动到工作区根目录
@@ -72,7 +84,6 @@ jobs:
           exit 1
         } else {
           echo "ZIP file ready at: $rootZipPath"
-          Get-Item $rootZipPath | Format-List
         }
 
     # 获取当前日期
@@ -80,27 +91,31 @@ jobs:
       id: current-date
       run: echo "date=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-    # 关键修复：使用工作区根目录的相对路径
-    - name: Create GitHub Release with ZIP
+    # 使用版本号创建 Release
+    - name: Create Versioned GitHub Release
       uses: softprops/action-gh-release@v1
       if: ${{ success() }}
       with:
-        name: "Windows Build v${{ github.run_number }}"
-        tag_name: "v${{ github.run_number }}"
+        name: "v${{ steps.app-version.outputs.version }} - Windows Release"
+        tag_name: "v${{ steps.app-version.outputs.version }}"
         body: |
-          🚀 Automated Windows build of dart_simple_live
+          🚀 **dart_simple_live ${{ steps.app-version.outputs.version }} for Windows**
           
           ### Build Details
-          - Build number: ${{ github.run_number }}
-          - Commit: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-          - Date: ${{ steps.current-date.outputs.date }}
+          - **Version**: ${{ steps.app-version.outputs.version }}
+          - **Build number**: ${{ github.run_number }}
+          - **Commit**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          - **Built at**: ${{ steps.current-date.outputs.date }}
           
           ### How to Use
           1. Download the ZIP file below
           2. Extract all files
           3. Run `dart_simple_live.exe`
+          
+          ### Changes
+          ${{ github.event.head_commit.message }}
         files: ${{ env.ZIP_PATH }}
         draft: false
-        prerelease: true
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
