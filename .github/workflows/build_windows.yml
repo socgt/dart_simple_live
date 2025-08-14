@@ -12,8 +12,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        path: 'src'  # 关键修复：指定检出路径
+      
+    # 关键修复：设置项目路径为 simple_live_app
+    - name: Set project path
+      run: echo "PROJECT_PATH=$env:GITHUB_WORKSPACE\simple_live_app" | Out-File -FilePath $env:GITHUB_ENV -Append
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -21,27 +23,22 @@ jobs:
         channel: stable
         flutter-version: "3.22.2"
 
-    - name: Verify directory structure
+    - name: Verify project structure
       run: |
-        # 显示完整目录结构
-        echo "Current directory: $(Get-Location)"
-        tree /F /A
-        # 检查关键文件是否存在
-        if (-not (Test-Path src/pubspec.yaml)) {
-          Write-Error "pubspec.yaml not found in src directory!"
-          Get-ChildItem -Recurse -Depth 3 | Format-Table Name
+        # 检查 simple_live_app 目录
+        if (-not (Test-Path "$env:PROJECT_PATH\pubspec.yaml")) {
+          Write-Error "pubspec.yaml not found in simple_live_app directory!"
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Depth 2 | Format-Table Name
           exit 1
         }
-        echo "Project structure verified. pubspec.yaml found in src directory."
-
-    - name: Set working directory
-      run: echo "PROJECT_ROOT=$env:GITHUB_WORKSPACE\src" | Out-File -FilePath $env:GITHUB_ENV -Append
+        echo "Project structure verified. Found pubspec.yaml in simple_live_app"
 
     - name: Enable Windows desktop
       run: flutter config --enable-windows-desktop
 
+    # 关键修复：在 simple_live_app 目录执行
     - name: Install dependencies
-      working-directory: ${{ env.PROJECT_ROOT }}
+      working-directory: ${{ env.PROJECT_PATH }}
       run: flutter pub get
 
     - name: Install FFmpeg
@@ -55,15 +52,17 @@ jobs:
       run: |
         $vlcUrl = "https://download.videolan.org/pub/vlc/3.0.20/win64/vlc-3.0.20-win64.exe"
         Invoke-WebRequest -Uri $vlcUrl -OutFile vlc_installer.exe
-        Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc"
+        Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc" -Force
         echo "C:\vlc" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+    # 关键修复：在 simple_live_app 目录构建
     - name: Build Windows Release
-      working-directory: ${{ env.PROJECT_ROOT }}
+      working-directory: ${{ env.PROJECT_PATH }}
       run: flutter build windows --release
 
+    # 关键修复：上传 simple_live_app 的构建结果
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: dart_simple_live_windows
-        path: src/build/windows/runner/Release
+        path: ${{ env.PROJECT_PATH }}\build\windows\runner\Release
