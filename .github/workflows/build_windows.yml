@@ -1,4 +1,4 @@
-name: Build Windows Executable
+name: Build and Release Windows Executable
 
 on:
   push:
@@ -22,15 +22,6 @@ jobs:
         channel: stable
         flutter-version: "3.22.2"
 
-    - name: Verify project structure
-      run: |
-        if (-not (Test-Path "$env:PROJECT_PATH\pubspec.yaml")) {
-          Write-Error "pubspec.yaml not found in simple_live_app directory!"
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Depth 2 | Format-Table Name
-          exit 1
-        }
-        echo "Project structure verified. Found pubspec.yaml in simple_live_app"
-
     - name: Enable Windows desktop
       run: flutter config --enable-windows-desktop
 
@@ -52,36 +43,33 @@ jobs:
         Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc"
         echo "C:\vlc" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-    # 关键修复：使用正确的构建路径
     - name: Build Windows Release
       working-directory: ${{ env.PROJECT_PATH }}
-      run: |
-        flutter build windows --release
-        # 使用包含 x64 的正确路径
-        $buildDir = "build\windows\x64\runner\Release"
-        if (-not (Test-Path $buildDir)) {
-          Write-Error "Build output not found at: $buildDir"
-          # 列出所有可能的构建目录
-          echo "Possible build locations:"
-          Get-ChildItem -Path build -Recurse -Filter "*.exe" | Format-Table FullName
-          exit 1
-        }
-        echo "Build output found at: $buildDir"
-        
-        # 验证可执行文件是否存在
-        $exePath = "$buildDir\simple_live_app.exe"
-        if (Test-Path $exePath) {
-          echo "Executable found: $exePath"
-          $file = Get-Item $exePath
-          echo "File size: $($file.Length / 1MB) MB"
-        } else {
-          Write-Error "Executable not found: $exePath"
-          exit 1
-        }
+      run: flutter build windows --release
 
-    # 关键修复：使用包含 x64 的正确上传路径
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: dart_simple_live_windows
         path: ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release
+
+    # 创建 GitHub Release
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      if: ${{ success() }}
+      with:
+        name: "Windows Build ${{ github.run_number }}"
+        tag_name: "build-${{ github.run_number }}"
+        body: |
+          Automated Windows build of dart_simple_live
+          - Build number: ${{ github.run_number }}
+          - Commit: ${{ github.sha }}
+          - Date: ${{ steps.current-date.outputs.date }}
+        files: |
+          ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release\*.exe
+          ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release\*.dll
+          ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release\data\*
+        draft: false
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
