@@ -52,34 +52,36 @@ jobs:
         Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc"
         echo "C:\vlc" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-    # 关键修复：添加构建前清理和构建后验证
-    - name: Clean build directory
-      working-directory: ${{ env.PROJECT_PATH }}
-      run: flutter clean
-
+    # 关键修复：使用正确的构建路径
     - name: Build Windows Release
       working-directory: ${{ env.PROJECT_PATH }}
       run: |
         flutter build windows --release
-        # 验证构建输出是否存在
-        $buildDir = "build\windows\runner\Release"
+        # 使用包含 x64 的正确路径
+        $buildDir = "build\windows\x64\runner\Release"
         if (-not (Test-Path $buildDir)) {
           Write-Error "Build output not found at: $buildDir"
-          # 列出可能的构建目录
+          # 列出所有可能的构建目录
           echo "Possible build locations:"
           Get-ChildItem -Path build -Recurse -Filter "*.exe" | Format-Table FullName
           exit 1
         }
         echo "Build output found at: $buildDir"
+        
+        # 验证可执行文件是否存在
+        $exePath = "$buildDir\simple_live_app.exe"
+        if (Test-Path $exePath) {
+          echo "Executable found: $exePath"
+          $file = Get-Item $exePath
+          echo "File size: $($file.Length / 1MB) MB"
+        } else {
+          Write-Error "Executable not found: $exePath"
+          exit 1
+        }
 
-    # 关键修复：使用通配符路径确保找到文件
+    # 关键修复：使用包含 x64 的正确上传路径
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: dart_simple_live_windows
-        path: |
-          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.exe
-          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.dll
-          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/data
-          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.pak
-          ${{ env.PROJECT_PATH }}/build/windows/runner/Release/*.manifest
+        path: ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release
