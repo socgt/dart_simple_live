@@ -47,28 +47,46 @@ jobs:
       working-directory: ${{ env.PROJECT_PATH }}
       run: flutter build windows --release
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: dart_simple_live_windows
-        path: ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release
+    # 关键修复：创建完整的 ZIP 包
+    - name: Create Release ZIP Package
+      working-directory: ${{ env.PROJECT_PATH }}
+      run: |
+        $releaseDir = "build\windows\x64\runner\Release"
+        $zipName = "dart_simple_live_windows_$env:GITHUB_RUN_NUMBER.zip"
+        
+        # 确保 ZIP 工具可用
+        if (-not (Get-Command Compress-Archive -ErrorAction SilentlyContinue)) {
+          Write-Error "Compress-Archive command not available!"
+          exit 1
+        }
+        
+        # 创建 ZIP 文件
+        Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipName -Force
+        echo "Created ZIP package: $zipName"
+        
+        # 设置 ZIP 文件路径环境变量
+        echo "ZIP_PATH=$env:PROJECT_PATH\$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-    # 创建 GitHub Release
-    - name: Create GitHub Release
+    # 关键修复：上传 ZIP 文件到 Release
+    - name: Create GitHub Release with ZIP
       uses: softprops/action-gh-release@v1
       if: ${{ success() }}
       with:
-        name: "Windows Build ${{ github.run_number }}"
-        tag_name: "build-${{ github.run_number }}"
+        name: "Windows Build v${{ github.run_number }}"
+        tag_name: "v${{ github.run_number }}"
         body: |
-          Automated Windows build of dart_simple_live
+          🚀 Automated Windows build of dart_simple_live
+          
+          ### Build Details
           - Build number: ${{ github.run_number }}
-          - Commit: ${{ github.sha }}
-          - Date: ${{ steps.current-date.outputs.date }}
-        files: |
-          ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release\*.exe
-          ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release\*.dll
-          ${{ env.PROJECT_PATH }}\build\windows\x64\runner\Release\data\*
+          - Commit: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          - Date: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+          
+          ### How to Use
+          1. Download the ZIP file below
+          2. Extract all files
+          3. Run `dart_simple_live.exe`
+        files: ${{ env.ZIP_PATH }}
         draft: false
         prerelease: true
       env:
