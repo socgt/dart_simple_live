@@ -12,31 +12,36 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        path: 'src'  # 关键修复：指定检出路径
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
         channel: stable
-        # 添加以下两行关键配置
-        flutter-version: "3.22.2"  # 指定兼容的Flutter版本
-        cache: true               # 启用缓存加速
+        flutter-version: "3.22.2"
 
-    - name: Verify project structure
+    - name: Verify directory structure
       run: |
+        # 显示完整目录结构
+        echo "Current directory: $(Get-Location)"
+        tree /F /A
         # 检查关键文件是否存在
-        if (-not (Test-Path pubspec.yaml)) {
-          Write-Error "pubspec.yaml not found! Current directory: $(Get-Location)"
-          Get-ChildItem -Recurse -Depth 2 | Format-Table Name
+        if (-not (Test-Path src/pubspec.yaml)) {
+          Write-Error "pubspec.yaml not found in src directory!"
+          Get-ChildItem -Recurse -Depth 3 | Format-Table Name
           exit 1
         }
-        echo "Project structure verified. pubspec.yaml found."
+        echo "Project structure verified. pubspec.yaml found in src directory."
+
+    - name: Set working directory
+      run: echo "PROJECT_ROOT=$env:GITHUB_WORKSPACE\src" | Out-File -FilePath $env:GITHUB_ENV -Append
 
     - name: Enable Windows desktop
       run: flutter config --enable-windows-desktop
 
-    # 关键修复：明确指定工作目录
     - name: Install dependencies
-      working-directory: ${{ github.workspace }}
+      working-directory: ${{ env.PROJECT_ROOT }}
       run: flutter pub get
 
     - name: Install FFmpeg
@@ -53,13 +58,12 @@ jobs:
         Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc"
         echo "C:\vlc" | Out-File -FilePath $env:GITHUB_PATH -Append
 
-    # 关键修复：明确指定工作目录
     - name: Build Windows Release
-      working-directory: ${{ github.workspace }}
+      working-directory: ${{ env.PROJECT_ROOT }}
       run: flutter build windows --release
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: dart_simple_live_windows
-        path: build/windows/runner/Release
+        path: src/build/windows/runner/Release
