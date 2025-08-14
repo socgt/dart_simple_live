@@ -47,34 +47,40 @@ jobs:
       working-directory: ${{ env.PROJECT_PATH }}
       run: flutter build windows --release
 
-    # 关键修复：创建完整的 ZIP 包
-    - name: Create Release ZIP Package
-      working-directory: ${{ env.PROJECT_PATH }}
+    # 关键修复：创建 ZIP 包并移动到工作区根目录
+    - name: Create and Move Release ZIP
       run: |
-        $releaseDir = "build\windows\x64\runner\Release"
-        $zipName = "dart_simple_live_windows_$env:GITHUB_RUN_NUMBER.zip"
+        # 进入项目目录
+        cd ${{ env.PROJECT_PATH }}
         
         # 创建 ZIP 文件
+        $releaseDir = "build\windows\x64\runner\Release"
+        $zipName = "dart_simple_live_windows_$env:GITHUB_RUN_NUMBER.zip"
         Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipName -Force
-        echo "Created ZIP package: $zipName"
         
-        # 设置 ZIP 文件路径环境变量（使用绝对路径）
-        $zipPath = Join-Path -Path $pwd -ChildPath $zipName
-        echo "ZIP_PATH=$zipPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-
+        # 移动到工作区根目录
+        Move-Item -Path $zipName -Destination $env:GITHUB_WORKSPACE
+        
+        # 设置相对路径环境变量
+        echo "ZIP_PATH=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+        
         # 验证 ZIP 文件存在
-        if (-not (Test-Path $zipPath)) {
-          Write-Error "ZIP file not created at: $zipPath"
-          Get-ChildItem -Path $pwd
+        $rootZipPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath $zipName
+        if (-not (Test-Path $rootZipPath)) {
+          Write-Error "ZIP file not created at: $rootZipPath"
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE
           exit 1
+        } else {
+          echo "ZIP file ready at: $rootZipPath"
+          Get-Item $rootZipPath | Format-List
         }
 
-    # 关键修复：正确格式化日期
+    # 获取当前日期
     - name: Get current date
       id: current-date
       run: echo "date=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-    # 关键修复：使用 ZIP_PATH 环境变量
+    # 关键修复：使用工作区根目录的相对路径
     - name: Create GitHub Release with ZIP
       uses: softprops/action-gh-release@v1
       if: ${{ success() }}
