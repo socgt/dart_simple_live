@@ -1,0 +1,53 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main ]  # 在 main 分支推送时触发
+  workflow_dispatch:    # 允许手动触发
+
+jobs:
+  build:
+    runs-on: windows-latest  # 使用 Windows 环境
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # 设置 Flutter 环境
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+
+    # 启用 Windows 桌面支持
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
+
+    # 安装依赖
+    - name: Install dependencies
+      run: flutter pub get
+
+    # 安装 FFmpeg
+    - name: Install FFmpeg
+      run: |
+        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-essentials.7z" -OutFile ffmpeg.7z
+        7z x ffmpeg.7z -o"C:\ffmpeg" > $null
+        echo "C:\ffmpeg\ffmpeg\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+    # 安装 VLC
+    - name: Install VLC
+      run: |
+        Invoke-WebRequest -Uri "https://download.videolan.org/pub/vlc/last/win64/vlc-3.0.20-win64.exe" -OutFile vlc_installer.exe
+        Start-Process -Wait -FilePath vlc_installer.exe -ArgumentList "/S", "/L=1033", "/InstallPath=C:\vlc"
+        echo "C:\vlc" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+    # 构建 Windows 应用
+    - name: Build Windows Release
+      run: flutter build windows --release
+
+    # 打包并上传编译结果
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: dart_simple_live_windows
+        path: build/windows/runner/Release
